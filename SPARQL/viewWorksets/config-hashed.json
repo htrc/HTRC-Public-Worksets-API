@@ -1,0 +1,90 @@
+{
+	"limit": 35000,
+	"defaultPageNo": 1,
+	"defaultPageSize": 25,
+	"getWorksetPage": {
+		"query": "WSVolMeta-PagedQueryTemplate.txt",
+		"filterd_query": "WSVolMeta-FilteredPageQueryTemplate.txt",
+		"context": "./SPARQL/WorksetContext.jsonld",
+		"required": [
+			"id"
+		],
+		"optional": [
+			"page",
+			"per_page",
+			"ar"
+		],
+		"id": {
+			"transform": "$ws$",
+			"type": "url"
+		},
+		"page": {
+			"type": "integer"
+		},
+		"per_page": {
+			"type": "integer"
+		},
+		"ar": {
+			"type": "string"
+		}
+	},
+	"getBIBFWorksetPage": {
+		"query": "WSVolMeta-BIBFPagedQueryTemplate.txt",
+		"filterd_query": "WSVolMeta-FilteredPageQueryTemplate.txt",
+		"context": "./SPARQL/WorksetContext.jsonld",
+		"required": [
+			"id"
+		],
+		"optional": [
+			"page",
+			"per_page",
+			"ar"
+		],
+		"id": {
+			"transform": "$ws$",
+			"type": "url"
+		},
+		"page": {
+			"type": "integer"
+		},
+		"per_page": {
+			"type": "integer"
+		},
+		"ar": {
+			"type": "string"
+		}
+	},
+	"listWorksetsContaining": {
+		"query": "listWorksetsContaining_MasterTemplate.txt",
+		"secondary_query": "listWorksetsContaining_SubTemplate.txt",
+		"context": "./SPARQL/WorksetContext.jsonld",
+		"required": [
+			"contains_vol"
+		],
+		"contains_vol": {
+			"transform": "$vid$",
+			"type": "url"
+		}
+	},
+	"getVolume": {
+		
+	},
+	"deleteWorkset": {
+		"query": "checkWorksetCreatorTemplate.txt",
+		"delete_query": "deleteWorksetTemplate.txt",
+		"context": "./SPARQL/WorksetContext.jsonld",
+		"required": [
+			"id"
+		],
+		"optional": [
+			"creator"
+		],
+		"id": {
+			"transform": "$ws$",
+			"type": "url"
+		},
+		"creator": {
+			"type": "string"
+		}
+	}
+}

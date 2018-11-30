@@ -1,0 +1,53 @@
+prefix dcterms: <http://purl.org/dc/terms/>
+prefix edm: <http://www.europeana.eu/schemas/edm/>
+prefix htrc: <http://wcsa.htrc.illinois.edu/> 
+prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+prefix ht: <https://www.hathitrust.org/>
+prefix prism: <http://prismstandard.org/namespaces/basic/2.0/>
+
+CONSTRUCT {
+  ?wsid 
+      edm:gathers ?vols . 
+	  
+  ?vols
+		rdf:type ?vtype;
+		dcterms:isPartOf ?vColl;
+		htrc:hasCatalogDescription ?vBib;
+		htrc:hasFullDescription ?vFullJson;
+		htrc:hasBriefDescription ?vBriefJson;
+		htrc:mediatedBy ?vMediatedBy;
+		dcterms:title ?vTitle;
+		dcterms:creator ?vAuthor;
+		dcterms:created ?vPubData;
+		dcterms:accessRights ?vrights;
+		ht:origin ?vorigin;
+		dcterms:contributor ?vContributor;
+		dcterms:subject ?vSubject;
+		prism:volume ?vVolume .
+}
+
+where {
+  ?wsid 
+      edm:gathers ?vols . 
+	  
+	  OPTIONAL { ?vols rdf:type ?vtype }
+      OPTIONAL { ?vols dcterms:isPartOf ?vColl}
+	  OPTIONAL { ?vols htrc:hasCatalogDescription ?vBib }
+	  OPTIONAL { ?vols htrc:hasFullDescription ?vFullJson }
+	  OPTIONAL { ?vols htrc:hasBriefDescription ?vBriefJson }
+	  OPTIONAL { ?vols htrc:mediatedBy ?vMediatedBy }
+	  OPTIONAL { ?vols dcterms:title ?vTitle }
+	  OPTIONAL { ?vols dcterms:creator ?vAuthor }
+	  OPTIONAL { ?vols dcterms:created ?vPubData }
+	  OPTIONAL { ?vols dcterms:accessRights ?vrights }
+	  OPTIONAL { ?vols ht:origin ?vorigin }
+	  OPTIONAL { ?vols dcterms:contributor ?vContributor }
+	  OPTIONAL { ?vols dcterms:subject ?vSubject }
+	  OPTIONAL { ?vols prism:volume ?vVolume }
+	  
+  VALUES ( ?wsid ) 
+     { 
+       ( ?WorkSetId ) 
+     }	  	   
+}

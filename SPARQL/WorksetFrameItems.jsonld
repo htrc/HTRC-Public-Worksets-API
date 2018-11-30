@@ -1,0 +1,11 @@
+{   "@context": "http://acbres224.ischool.illinois.edu/dcWSfetch_resources/WorksetContext.jsonld",
+    "@default": false,
+    "@explicit": true,
+    "id": "",
+    "@type": "Workset",
+    "title": "",
+    "creator": "",
+    "created": "",
+    "extent": 0,
+    "gathers": ""
+}

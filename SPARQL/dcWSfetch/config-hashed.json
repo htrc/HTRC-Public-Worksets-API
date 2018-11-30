@@ -1,0 +1,109 @@
+{
+	"services": {
+		"dcWSfetch": {
+			"resources": "http://acbres224.ischool.illinois.edu/dcWSfetch_resources/",
+			"limit": 35000,
+			"getItems": {
+				"query": "getItems.sparql",
+				"context": "./SPARQL/WorksetContext.jsonld",
+				"paging": {
+					"query": "getItems.sparql",
+					"field": "http://www.europeana.eu/schemas/edm/gathers"
+				},
+				"required": [
+					"id"
+				],
+				"optional": [
+
+				],
+				"id": {
+					"transform": "?WorkSetId",
+					"type": "url"
+				}
+			},
+			"getWsItemsWithVolMeta": {
+				"query": "getWsItemsWithVolMeta.sparql",
+				"context": "./SPARQL/WorksetContext.jsonld",
+				"required": [
+					"id"
+				],
+				"optional": [
+
+				],
+				"id": {
+					"transform": "?WorkSetId",
+					"type": "url"
+				}
+			},     			 
+			"getShortDescription": {
+				"query": "shortDescription.sparql",
+				"context": "./SPARQL/WorksetContext.jsonld",
+				"required": [
+					"id"
+				],
+				"optional": [
+
+				],
+				"id": {
+					"transform": "?WorkSetId",
+					"type": "url"
+				}
+			},
+			"getDescription": {
+				"query": "getDescription.sparql",
+				"context": "./SPARQL/WorksetContext.jsonld",
+				"paging": {
+					"query": "getDescriptionPaging.sparql",
+					"field": "http://www.europeana.eu/schemas/edm/gathers"
+				},
+				"required": [
+					"id"
+				],
+				"optional": [
+
+				],
+				"id": {
+					"transform": "?WorkSetId",
+					"type": "url"
+				}
+			},
+			"getWsDescripWithVolMeta": {
+				"query": "getWsDescripWithVolMeta.sparql",
+				"context": "./SPARQL/WorksetContext.jsonld",
+				"required": [
+					"id"
+				],
+				"optional": [
+
+				],
+				"id": {
+					"transform": "?WorkSetId",
+					"type": "url"
+				}
+			},		
+			"list": {
+				"query": "list.sparql",
+				"context": "./SPARQL/WorksetContext.jsonld",
+				"customized": true,
+				"function": "listCustom",
+				"required": [
+					"vis"
+				],
+				"optional": [
+					"creator",
+					"group"
+				],
+				"vis": {
+					"type": "string",
+					"range": ["public","private","group"]
+				},
+				"creator": {
+					"type": "string"
+				},
+				"group": {
+					"type": "string"
+				}								
+			}
+		}
+	}
+}

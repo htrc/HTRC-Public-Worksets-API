@@ -1,0 +1,37 @@
+prefix dcterms: <http://purl.org/dc/terms/>
+prefix edm: <http://www.europeana.eu/schemas/edm/>
+prefix htrc: <http://wcsa.htrc.illinois.edu/> 
+prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+
+CONSTRUCT {
+  ?wsid
+      rdf:type htrc:Workset ;
+      dcterms:title ?title ;
+      dcterms:creator ?cre ;
+      dcterms:creator ?coll_cre ; 
+      dcterms:created ?dat ;
+      dcterms:extent  ?ext ;
+      htrc:hasVisibility ?vis .} 
+
+where {
+  ?wsid 
+      rdf:type htrc:Workset ;
+      dcterms:title ?title ;
+      dcterms:created ?dat ;
+      dcterms:extent  ?ext ;
+      htrc:hasVisibility ?vis . 
+
+   OPTIONAL { ?wsid htrc:hasGroup ?group }
+   OPTIONAL { ?wsid dcterms:creator ?cre_id .
+               ?cre_id rdfs:label ?cre . }  
+   OPTIONAL { ?wsid dcterms:isVersionOf ?coll . 
+               ?coll dcterms:creator ?coll_res . }
+
+  BIND(REPLACE(STRAFTER(STR(?coll_res),"http://catalogdata.library.illinois.edu/lod/entities/ht/user/"),"%20"," ") AS ?coll_cre) .
+
+ VALUES
+	( ?wsid )
+	{ (?WorkSetId) }
+}

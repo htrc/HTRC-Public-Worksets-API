@@ -1,0 +1,120 @@
+prefix dcterms: <http://purl.org/dc/terms/>
+prefix edm: <http://www.europeana.eu/schemas/edm/>
+prefix htrc: <http://wcsa.htrc.illinois.edu/> 
+prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+prefix ht: <https://www.hathitrust.org/>
+prefix prism: <http://prismstandard.org/namespaces/basic/2.0/>
+prefix as: <http://www.w3.org/ns/activitystreams#>
+# MUST REPLACE variables contained within $...$ before submitting SPARQL to Virtuoso RO-sparql end point
+#   ws is Workset id
+#   wsF is id of Filtered Workset, i.e., Workset id extended with the filter part of the query string
+#   wsP is id of WorksetPage, i.e., Filtered Workset id with additional query string, e.g.: &pageNo=x&pageSize=y
+#   offset = (x-1)*y, limit = y, startIndex = offset+1
+# BEFORE RETURNING RESULT, MUST:
+#   add link to context, http://worksets.hathitrust.org/dcWSfetch_resources/WorksetContext.jsonld, and flatten 
+#   then add first, last, next, prev to WorksetPage description as appropriate (based in part on filtered WS extent value)
+
+CONSTRUCT {
+
+    $wsP$ 
+	      rdf:type htrc:WorksetPage ;
+	      as:startIndex 21 ;
+	      as:partOf $wsF$ ;
+	      as:items ?vols .
+
+	$wsF$
+		  rdf:type htrc:Workset ;
+          dcterms:isPartOf $ws$ ;
+		  dcterms:extent ?vMatches .
+	  
+	$ws$   
+		  rdf:type htrc:Workset ;
+		  dcterms:title ?title ;
+		  dcterms:creator ?cre ; 
+		  dcterms:created ?dat ;
+		  dcterms:extent  ?ext ;
+		  htrc:hasCriterion ?crit ;
+		  htrc:hasResearchMotivation ?mot ;
+		  htrc:intendedForUse ?intent ;
+		  htrc:hasVisibility ?vis ;
+		  htrc:hasGroup ?group ;
+		  dcterms:publisher ?pub ;
+		  dcterms:abstract ?abs ;
+		  dcterms:language ?lang ;
+		  dcterms:temporal ?temp ;
+		  dcterms:format ?form .
+	  
+  ?vols
+		rdf:type ?vType;
+		dcterms:isPartOf ?vColl;
+		htrc:hasCatalogDescription ?vBib;
+		htrc:hasFullDescription ?vFullJson;
+		htrc:hasBriefDescription ?vBriefJson;
+		htrc:mediatedBy ?vMediatedBy;
+		dcterms:title ?vTitle;
+		dcterms:creator ?vAuthor;
+		dcterms:created ?vPubData;
+		dcterms:accessRights ?vRights;
+		ht:origin ?vOrigin;
+		dcterms:contributor ?vContributor;
+		dcterms:subject ?vSubject;
+		prism:volume ?vVolume .
+}
+
+where {
+  $ws$ 
+      rdf:type htrc:Workset ;
+      dcterms:title ?title ;
+      dcterms:creator ?cre ;
+      dcterms:extent  ?ext ;	  
+      dcterms:created ?dat ;
+      htrc:hasVisibility ?vis . 
+
+  { select ?vols ?vMatches
+      where 
+	   {
+         { select ?vols
+           where { $ws$ edm:gathers ?vols . 
+		           ?vols dcterms:accessRights ?ar
+				   filter ( ?ar = "pd" ) .
+		         }
+           ORDER BY ASC (?vols) 
+         } 
+         { select (count(?vols) as ?vMatches)
+           where { $ws$ edm:gathers ?vols . 
+		           ?vols dcterms:accessRights ?ar
+				   filter ( ?ar = "pd" ) .
+		         }
+         } 
+       }
+       OFFSET $offset$
+       LIMIT $limit$           
+  }
+	  
+	  OPTIONAL { $ws$ dcterms:abstract ?abs } 
+	  OPTIONAL { $ws$ htrc:hasCriterion ?crit }
+	  OPTIONAL { $ws$ htrc:hasResearchMotivation ?mot }
+	  OPTIONAL { $ws$ htrc:hasGroup ?group }
+	  OPTIONAL { $ws$ dcterms:publisher ?pub }
+	  OPTIONAL { $ws$ dcterms:temporal ?temp }
+      OPTIONAL { $ws$ dcterms:language ?lang }	
+      OPTIONAL { $ws$ htrc:intendedForUse ?intent }		  
+	  OPTIONAL { $ws$ dcterms:format ?form }
+	  
+	  OPTIONAL { ?vols rdf:type ?vType }
+      OPTIONAL { ?vols dcterms:isPartOf ?vColl}
+	  OPTIONAL { ?vols htrc:hasCatalogDescription ?vBib }
+	  OPTIONAL { ?vols htrc:hasFullDescription ?vFullJson }
+	  OPTIONAL { ?vols htrc:hasBriefDescription ?vBriefJson }
+	  OPTIONAL { ?vols htrc:mediatedBy ?vMediatedBy }
+	  OPTIONAL { ?vols dcterms:title ?vTitle }
+	  OPTIONAL { ?vols dcterms:creator ?vAuthor }
+	  OPTIONAL { ?vols dcterms:created ?vPubData }
+	  OPTIONAL { ?vols dcterms:accessRights ?vRights }
+	  OPTIONAL { ?vols ht:origin ?vOrigin }
+	  OPTIONAL { ?vols dcterms:contributor ?vContributor }
+	  OPTIONAL { ?vols dcterms:subject ?vSubject }
+	  OPTIONAL { ?vols prism:volume ?vVolume }
+
+}

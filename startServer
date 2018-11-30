@@ -1,0 +1,1 @@
+node --stack-size=128500 server.js 

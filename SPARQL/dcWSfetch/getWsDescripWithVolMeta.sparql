@@ -1,0 +1,84 @@
+prefix dcterms: <http://purl.org/dc/terms/>
+prefix edm: <http://www.europeana.eu/schemas/edm/>
+prefix htrc: <http://wcsa.htrc.illinois.edu/> 
+prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+prefix ht: <https://www.hathitrust.org/>
+prefix prism: <http://prismstandard.org/namespaces/basic/2.0/>
+
+CONSTRUCT {
+  ?wsid
+      rdf:type htrc:Workset ;
+      dcterms:title ?title ;
+      dcterms:creator ?cre ; 
+      dcterms:created ?dat ;
+      dcterms:extent  ?ext ;
+      htrc:hasCriterion ?crit ;
+      htrc:hasResearchMotivation ?mot ;
+      htrc:intendedForUse ?intent ;
+      htrc:hasVisibility ?vis ;
+      htrc:hasGroup ?group ;
+      dcterms:publisher ?pub ;
+      dcterms:abstract ?abs ;
+      dcterms:language ?lang ;
+      dcterms:temporal ?temp ;
+      dcterms:format ?form ;
+      edm:gathers ?vols .
+	  
+  ?vols
+		rdf:type ?vtype;
+		dcterms:isPartOf ?vColl;
+		htrc:hasCatalogDescription ?vBib;
+		htrc:hasFullDescription ?vFullJson;
+		htrc:hasBriefDescription ?vBriefJson;
+		htrc:mediatedBy ?vMediatedBy;
+		dcterms:title ?vTitle;
+		dcterms:creator ?vAuthor;
+		dcterms:created ?vPubData;
+		dcterms:accessRights ?vrights;
+		ht:origin ?vorigin;
+		dcterms:contributor ?vContributor;
+		dcterms:subject ?vSubject;
+		prism:volume ?vVolume .
+	} 
+
+where {
+  ?wsid 
+      rdf:type htrc:Workset ;
+      dcterms:title ?title ;
+      dcterms:creator ?cre ; 
+      dcterms:created ?dat ;
+      dcterms:extent  ?ext ;
+      htrc:hasVisibility ?vis ;
+      edm:gathers ?vols . 
+	  
+	  OPTIONAL { ?wsid dcterms:abstract ?abs } 
+	  OPTIONAL { ?wsid htrc:hasCriterion ?crit }
+	  OPTIONAL { ?wsid htrc:hasResearchMotivation ?mot }
+	  OPTIONAL { ?wsid htrc:hasGroup ?group }
+	  OPTIONAL { ?wsid dcterms:publisher ?pub }
+	  OPTIONAL { ?wsid dcterms:temporal ?temp }
+      OPTIONAL { ?wsid dcterms:language ?lang }	
+      OPTIONAL { ?wsid htrc:intendedForUse ?intent }		  
+	  OPTIONAL { ?wsid dcterms:format ?form }
+	  
+	  OPTIONAL { ?vols rdf:type ?vtype }
+      OPTIONAL { ?vols dcterms:isPartOf ?vColl}
+	  OPTIONAL { ?vols htrc:hasCatalogDescription ?vBib }
+	  OPTIONAL { ?vols htrc:hasFullDescription ?vFullJson }
+	  OPTIONAL { ?vols htrc:hasBriefDescription ?vBriefJson }
+	  OPTIONAL { ?vols htrc:mediatedBy ?vMediatedBy }
+	  OPTIONAL { ?vols dcterms:title ?vTitle }
+	  OPTIONAL { ?vols dcterms:creator ?vAuthor }
+	  OPTIONAL { ?vols dcterms:created ?vPubData }
+	  OPTIONAL { ?vols dcterms:accessRights ?vrights }
+	  OPTIONAL { ?vols ht:origin ?vorigin }
+	  OPTIONAL { ?vols dcterms:contributor ?vContributor }
+	  OPTIONAL { ?vols dcterms:subject ?vSubject }
+	  OPTIONAL { ?vols prism:volume ?vVolume }
+			
+  VALUES ( ?wsid ) 
+     { 
+       ( ?WorkSetId ) 
+     }	  	   
+}

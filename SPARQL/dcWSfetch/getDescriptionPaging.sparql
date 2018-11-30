@@ -1,0 +1,20 @@
+prefix edm: <http://www.europeana.eu/schemas/edm/>
+prefix htrc: <http://wcsa.htrc.illinois.edu/> 
+prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+CONSTRUCT {
+  ?wsid
+      rdf:type htrc:Workset ;
+      edm:gathers ?vols .
+	  } 
+
+where {
+  ?wsid 
+      rdf:type htrc:Workset ;
+      edm:gathers ?vols . 	  
+
+  VALUES ( ?wsid ) 
+     { 
+       ( ?WorkSetId ) 
+     }	  	   
+}

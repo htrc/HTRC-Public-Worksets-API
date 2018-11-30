@@ -1,0 +1,45 @@
+prefix dcterms: <http://purl.org/dc/terms/>
+prefix edm: <http://www.europeana.eu/schemas/edm/>
+prefix htrc: <http://wcsa.htrc.illinois.edu/> 
+prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+
+CONSTRUCT {
+  ?wsid
+      rdf:type htrc:Workset ;
+      edm:gathers ?vols .
+  ?vols
+		rdf:type ?vtype;
+		dcterms:isPartOf ?vColl;
+		htrc:hasCatalogDescription ?vBib;
+		htrc:hasFullDescription ?vFullJson;
+		htrc:hasBriefDescription ?vBriefJson;
+		htrc:mediatedBy ?vMediatedBy;
+		dcterms:title ?vTitle;
+		dcterms:creator ?vAuthor;
+		dcterms:created ?vPubData;
+		dcterms:accessRights ?vrights .	  
+} 
+
+where {
+  ?wsid 
+      rdf:type htrc:Workset ;
+      edm:gathers ?vols . 	  
+  ?vols
+      rdf:type ?vtype .
+	  
+      OPTIONAL { ?vols dcterms:isPartOf ?vColl}
+	  OPTIONAL { ?vols htrc:hasCatalogDescription ?vBib }
+	  OPTIONAL { ?vols htrc:hasFullDescription ?vFullJson }
+	  OPTIONAL { ?vols htrc:hasBriefDescription ?vBriefJson }
+	  OPTIONAL { ?vols htrc:mediatedBy ?vMediatedBy }
+	  OPTIONAL { ?vols dcterms:title ?vTitle }
+	  OPTIONAL { ?vols dcterms:creator ?vAuthor }
+	  OPTIONAL { ?vols dcterms:created ?vPubData }
+	  OPTIONAL { ?vols dcterms:accessRights ?vrights }
+	  
+  VALUES ( ?wsid ) 
+     { 
+       ( ?WorkSetId ) 
+     }	  	   
+}

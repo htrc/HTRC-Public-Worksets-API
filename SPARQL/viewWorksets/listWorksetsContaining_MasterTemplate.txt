@@ -1,0 +1,22 @@
+prefix dcterms: <http://purl.org/dc/terms/>
+prefix edm: <http://www.europeana.eu/schemas/edm/>
+prefix htrc: <http://wcsa.htrc.illinois.edu/>
+prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+prefix xsd: <http://www.w3.org/2001/XMLSchema#>
+prefix ht: <https://www.hathitrust.org/>
+prefix prism: <http://prismstandard.org/namespaces/basic/2.0/>
+Construct {
+	?vols edm:isGatheredInto ?ws ;
+		  dcterms:title ?title .
+	}
+where {
+	{select ?vols, ?ws, ?title
+	 where {    
+		 ?ws dcterms:created ?cre .
+		 ?vols ^edm:gathers ?ws ;
+		       dcterms:title ?title
+		 VALUES ?vols {$vid$}
+	} ORDER BY DESC(?cre)
+		LIMIT 5
+	}
+}
