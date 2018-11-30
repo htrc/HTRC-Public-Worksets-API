@@ -1,6 +1,6 @@
 FROM node:8
 
-#WORKDIR <enter workdir path>
+WORKDIR /opt/virtuoso-compose
 
 COPY . .
 
