@@ -18,7 +18,7 @@
   },
   "homepage": "https://github.com/htrc/HTRC-Worksets-API#readme",
   "dependencies": {
-    "async": "^2.6.0",
+    "async": "^2.6.3",
     "body-parser": "^1.18.3",
     "config": "^1.30.0",
     "express": "^4.16.3",
