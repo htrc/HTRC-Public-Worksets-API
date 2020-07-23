@@ -1,6 +1,6 @@
 {
   "name": "htrc-worksets-api",
-  "version": "0.1.0",
+  "version": "0.16.1",
   "description": "API for communicating with triple store containing workset and volume metadata",
   "main": "server.js",
   "scripts": {
@@ -18,7 +18,7 @@
   },
   "homepage": "https://github.com/htrc/HTRC-Worksets-API#readme",
   "dependencies": {
-    "async": "^2.6.3",
+    "ajv": "^6.10.0",
     "body-parser": "^1.18.3",
     "config": "^1.30.0",
     "express": "^4.16.3",

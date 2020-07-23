@@ -10,13 +10,12 @@ var sanitizer = require('validator');
 const uuidv1 = require('uuid/v1');
 //config library
 var config = require('config');
-//jsonschema library
-var Validator = require('jsonschema').Validator;
-//Validator
-var v = new Validator();
+//ajv library
+var Ajv = require('ajv');
+// validator
+var ajv = new Ajv();
 
 var SOURCE_DATA_SCHEMA = {
-	"id": "/SourceData",
 	"type": "object",
 	"properties": {
 		"extent": { "type": [ "integer", "string" ] },
@@ -124,13 +123,15 @@ function gathersPaging(workset,page_size,graph_url,target_url) {
 function buildWorksetObject(fields) {
 	var workset = {};
 
-	if ('source_data' in fields && v.validate(fields.source_data,SOURCE_DATA_SCHEMA).valid) {
+	console.log("Validating user input...");
+	if ('source_data' in fields && validate(fields.source_data)) {
 		var collection = fields.source_data;
 	}
 	else {
 		console.log("Missing source_data");
 		return undefined;
 	}
+	console.log("Validation successful");
 
 	workset['id'] = uuidv1();
 
@@ -239,13 +240,11 @@ function buildWorksetObject(fields) {
 	return workset;
 }
 
-function submitWorksetToVirtuoso(workset,res,return_html) {
+function submitWorksetToVirtuoso(workset,res) {
 	console.log("Workset from portal: %o",workset);
 
 	var graph_url = '<' + config.get('Worksets.base') + '/graph/' + workset['id'] + '>';
 	var target_url = '<' + config.get('Worksets.base') + '/wsid/' + workset['id'] + '>';
-
-	console.log("SUCESS");
 
 	var query = 'PREFIX rdf:	<http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n';
 	query += 'PREFIX rdfs:	<http://www.w3.org/2000/01/rdf-schema#>\n';

@@ -11,7 +11,6 @@
 var url = require('url');
 var querystring = require('querystring');
 var thenRequest = require('then-request');
-var async = require('async');
 var _ = require('underscore');
 var jsonld = require('jsonld');
 var Q = require('q');
@@ -23,42 +22,40 @@ var jsonConfig = {};
 
 console.time("loadconfig");
 //load configuration
-async.series([
-	function() {
-		fs.readFile('./SPARQL/dcWSfetch/config-hashed.json', function(err,res) {
-			jsonConfig = JSON.parse(res);
-			//parse json Config, find any resource configuration url
-			Object.keys(jsonConfig.services).forEach(function(keyConfig) {
-				var configService = jsonConfig.services[keyConfig];
-				Object.keys(configService).forEach(function(key) {
-					var methodConfig = configService[key];
-					//parse Sparql definition
-					if (_.isObject(methodConfig)) {
-						console.time("getSparqlResource");
-						if (methodConfig['query'] !== undefined) {
-							fs.readFile('./SPARQL/dcWSfetch/' + methodConfig['query'], 'utf8', function(err,data) {
-								console.timeEnd("getSparqlResource");
-								methodConfig['resQuery'] = data;
-							});
-						}
-						if (methodConfig['paging'] !== undefined) {
-							fs.readFile('./SPARQL/dcWSfetch/' + methodConfig['paging']['query'], 'utf8', function(err,data) {
-								methodConfig['resPaging'] = data;
-							});
-						}
-						if (methodConfig['context'] !== undefined) {
-							console.time("getContextResource");
-							fs.readFile(methodConfig['context'], function(err,data) {
-								methodConfig['resContext'] = JSON.parse(data);
-							});
-						}
-					}
-				})
-			})
-			console.timeEnd("loadconfig");
+fs.readFile('./SPARQL/dcWSfetch/config-hashed.json', function(err,res) {
+	jsonConfig = JSON.parse(res);
+	//parse json Config, find any resource configuration url
+	Object.keys(jsonConfig.services).forEach(function(keyConfig) {
+		var configService = jsonConfig.services[keyConfig];
+		Object.keys(configService).forEach(function(key) {
+			var methodConfig = configService[key];
+			//parse Sparql definition
+			if (_.isObject(methodConfig)) {
+				console.time("getSparqlResource");
+				if (methodConfig['query'] !== undefined) {
+					fs.readFile('./SPARQL/dcWSfetch/' + methodConfig['query'], 'utf8', function(err,data) {
+						console.timeEnd("getSparqlResource");
+						methodConfig['resQuery'] = data;
+					});
+				}
+				if (methodConfig['paging'] !== undefined) {
+					fs.readFile('./SPARQL/dcWSfetch/' + methodConfig['paging']['query'], 'utf8', function(err,data) {
+						methodConfig['resPaging'] = data;
+					});
+				}
+				if (methodConfig['context'] !== undefined) {
+					console.time("getContextResource");
+					fs.readFile(methodConfig['context'], function(err,data) {
+						methodConfig['resContext'] = JSON.parse(data);
+					});
+					console.timeEnd("getContextResource");
+				}
+				console.timeEnd("getSparqlResource");
+			}
 		})
-	}
-])
+	})
+	console.timeEnd("loadconfig");
+})
 
 //Used to load results where the number of triples is greater than the set limit
 function tracePage(serviceConfig,pOffset,pLimit) {
