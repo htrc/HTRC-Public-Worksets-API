@@ -1,17 +1,43 @@
 //reading file system / file
-var fs = require("fs");
+import fs from "fs";
 //var http = require('http');
-var request = require("request");
+import needle from 'needle';
 //url parser
-var url = require('url');
+import url from 'url';
 //Library for input sanitation
-var validator = require('validator');
+import validator from 'validator';
+//logger
+import { createLogger, format, transports } from 'winston';
 //jsonld library
-var jsonld = require('jsonld');
+import jsonld from 'jsonld';
 //XML parsing library
-var xml2js = require('xml2js');
+import xml2js from 'xml2js';
 //config library
-var config = require('config');
+import config from 'config';
+
+//Setup logger
+const myFormat = format.printf( ({ level, message, timestamp , ...metadata }) => {
+	let msg = `${timestamp} [${level}] : ${message} `
+	if(metadata) {
+		msg += JSON.stringify(metadata)
+	}
+	return msg
+});
+const logger = createLogger({
+	level: 'info',
+	format: format.json()
+});
+if (process.env.NODE_ENV !== 'production') {
+	logger.add(new transports.Console({
+		level: 'debug',
+		format: format.combine(
+			format.colorize(),
+			format.splat(),
+			format.timestamp(),
+			myFormat
+		),
+	}));
+}
 
 var functionConfigs;
 fs.readFile('./SPARQL/viewWorksets/config-hashed.json', function(err,data) {
@@ -29,13 +55,14 @@ function getParameters(req,function_name) {
 
 	var user_submitted_params = url.parse(req.url, true).query;
 	var approved_params = {};
-	console.log(user_submitted_params);
+	logger.info("User submitted params: %s",user_submitted_params);
 	user_submitted_params = Object.assign(user_submitted_params,req.params);
-	console.log(user_submitted_params);
+	logger.info("User submitted params: %o",user_submitted_params);
 
 	//Make sure all required parameters are present
 	for (var index = 0; index < requiredParam.length; index++) {
 		if (!(requiredParam[index] in user_submitted_params)) {
+			logger.error("Parameter %s is missing",requiredParam[index]);
 			throw Error("parameter " + requiredParam[index] + " is missing");
 		}
 	}
@@ -43,6 +70,7 @@ function getParameters(req,function_name) {
 	for (var key in user_submitted_params) {
 		//Make sure no extranious parameters are present
 		if (!requiredParam.includes(key) && !optionalParam.includes(key)) {
+			logger.error("Parameter %s is not allowed",key);
 			throw Error("parameter " + key + " is not allowed");
 		}
 
@@ -54,10 +82,14 @@ function getParameters(req,function_name) {
 		else if (functionConfigs[function_name][key]['type'] == 'integer') {
 			verifyTypeFunction = validator.isInt;
 		}
+		else if (functionConfigs[function_name][key]['type'] == 'boolean') {
+			verifyTypeFunction = validator.isBoolean;
+		}
 		else if (functionConfigs[function_name][key]['type'] == 'string') {
 			user_submitted_params[key] = validator.escape(user_submitted_params[key]);
 		}
 		else {
+			logger.error("Input type %s not implemented",functionConfigs[function_name][key]['type']);
 			throw Error("Input type " + functionConfigs[function_name][key]['type'] + " not implemented");
 		}
 
@@ -66,6 +98,7 @@ function getParameters(req,function_name) {
 				approved_params[key] = user_submitted_params[key];
 			}
 			else {
+				logger.error("Parameter %s must be a %s",key,functionConfigs[function_name][key]['type']);
 				throw Error("Parameter " + key + " must be a " + functionConfigs[function_name][key]['type']);
 			}
 		}
@@ -78,36 +111,29 @@ function getParameters(req,function_name) {
 }
 
 function sendSPARQLQuery(query,serviceMethod,params,req,res) {
-	console.log("Sending request to %s",config.get('Read-Only_Endpoint.domain') + ':' + config.get('Read-Only_Endpoint.port') + '/' + config.get('Read-Only_Endpoint.path'));
-	request({
-		method: 'POST',
-		uri: config.get('Read-Only_Endpoint.domain') + ':' + config.get('Read-Only_Endpoint.port') + '/' + config.get('Read-Only_Endpoint.path'),
-		headers: {
-			'Content-Type': 'application/x-www-form-unencoded',
-		},
-		form: {
-			'default-graph-uri': '',
-			'query': query,
-			'format': 'application/ld+json'
-		}
+	logger.info("Sending request to %s",config.get('Read-Only_Endpoint.domain') + ':' + config.get('Read-Only_Endpoint.port') + '/' + config.get('Read-Only_Endpoint.path'));
+
+	needle.post(config.get('Read-Only_Endpoint.domain') + ':' + config.get('Read-Only_Endpoint.port') + '/' + config.get('Read-Only_Endpoint.path'),{
+		'default-graph-uri': '',
+		'query': query,
+		'format': 'application/ld+json'
 	}, function (er,rs,bd) {
 		if (er) {
 			res.write("ERROR IN SENDING REQUEST");
 			res.write(er);
 		}
 		else {
-			console.log("REQUEST WORKED");
-			console.log("Response: %s",bd);
+			logger.info("REQUEST WORKED");
+			logger.info("Response: %s",bd);
 
-
-			console.log("Getting context from %s",functionConfigs[serviceMethod]['context']);
+			logger.info("Getting context from %s",functionConfigs[serviceMethod]['context']);
 			fs.readFile(functionConfigs[serviceMethod]['context'],function(e,d){
 				if (e) {
-					console.log("Error: %o",e);
+					logger.error("Error: %o",e);
 					throw e;
 				}
 				else {
-					console.log("Unparsed conted doucment %s",d);
+					logger.info("Unparsed conted doucment %s",d);
 					var context = JSON.parse(d);
 
 					var promises = jsonld.promises;
@@ -164,6 +190,7 @@ function sendSPARQLQuery(query,serviceMethod,params,req,res) {
 						}
 						return;
 					}, function(err) {
+						logger.error("ERROR IN PROMISE: %o",err);
 						res.write("ERROR IN PROMISE");
 						res.end(err);
 					});
@@ -184,77 +211,64 @@ function deleteWorkset(req,res) {
 	var template_file = functionConfigs[method_name]['query'];
 	fs.readFile('./SPARQL/viewWorksets/' + template_file, function(err,data) {
 		if (err) {
-			console.log("ERROR READING FILE: %o",err);
+			logger.error("ERROR READING FILE: %o",err);
 		}
 		else {
 			try {
 				var data_string = data.toString('utf8');
 				params['id'] = params['id'].replace('wsid','graph')
-				console.log("Deleting workset %s",params['id']);
+				logger.info("Deleting workset %s",params['id']);
 				if (params['id'].substring(0,config.get('Read-Write_Endpoint.domain').length+7) == config.get('Read-Write_Endpoint.domain') + '/graph/') {
 					data_string = data_string.replace(new RegExp(functionConfigs[method_name]['id']['transform'].replace(/\$/g,'\\$'),'g'),'<' + params['id'] + '>');
 				}
 				else {
+					logger.error("Graph id must start with '%s/graph/'",config.get('Read-Write_Endpoint.domain'));
 					throw Error("Graph id must start with '" + config.get('Read-Write_Endpoint.domain') + "/graph/'");
 				}
 
-				request({
-					method: 'POST',
-					uri: config.get('Read-Only_Endpoint.domain') + ':' + config.get('Read-Only_Endpoint.port') + '/' + config.get('Read-Only_Endpoint.path'),
-					headers: {
-						'Content-Type': 'application/x-www-form-unencoded',
-					},
-					form: {
-						'default-graph-uri': '',
-						'query': data_string,
-						'format': 'application/ld+json'
-					}
+				needle.post(config.get('Read-Only_Endpoint.domain') + ':' + config.get('Read-Only_Endpoint.port') + '/' + config.get('Read-Only_Endpoint.path'),{
+					'default-graph-uri': '',
+					'query': data_string,
+					'format': 'application/ld+json'
 				}, function (er,rs,bd) {
 					if (er) {
+						logger.error("ERROR: %o",er);
 						throw Error(er);
 					}
 					else {
 						try {
-							console.log("SELECTED WORKSET, PROCEDING TO DELETE");
+							logger.info("SELECTED WORKSET, PROCEDING TO DELETE");
 
 							var creator_varified = false;
 							var parser = new xml2js.Parser();
-							console.log("Workset contents: %s",bd);
+							logger.info("Workset contents: %s",bd);
 							parser.parseString(bd, function(err,result) {
-								console.log("Parsed XML: %o",result);
+								logger.info("Parsed XML: %o",result);
 								var creator_names = [];
-								console.log("Result: %o",'result' in result['sparql']['results'][0]);
+								logger.info("Result: %o",'result' in result['sparql']['results'][0]);
 								if ('result' in result['sparql']['results'][0]) {
 									var results = result['sparql']['results'][0]['result'];
 									for (var i = 0; i < results.length; i++) {
 										fs.readFile('./SPARQL/viewWorksets/' + functionConfigs[method_name]['delete_query'], function(e,d) {
 											if (e) {
-												console.log("ERROR READING FILE: %o",e);
+												logger.error("ERROR READING FILE: %o",e);
 											}
 											else {
 												var delete_query_string = d.toString('utf8');
 												delete_query_string = delete_query_string.replace(new RegExp(functionConfigs[method_name]['id']['transform'].replace(/\$/g,'\\$'),'g'),'<' + params['id'] + '>');
-												console.log("Delete query string: %s",delete_query_string);
+												logger.info("Delete query string: %s",delete_query_string);
 
-												request({
-													method: 'POST',
-													uri: config.get('Read-Write_Endpoint.domain') + ':' + config.get('Read-Write_Endpoint.port') + '/' + config.get('Read-Write_Endpoint.path'),
-													port: config.get('Read-Write_Endpoint.port'),
-													headers: {
-														'Content-Type': 'application/x-www-form-unencoded',
-													},
-													form: {
-														'default-graph-uri': '',
-														'query': delete_query_string,
-														'format': 'application/ld+json'
-													},
-													auth: {
-														user: config.get('Read-Write_Endpoint.username'),
-														password: config.get('Read-Write_Endpoint.password'),
-														sendImmediately: false
-													}
+												needle.post(config.get('Read-Write_Endpoint.domain') + ':' + config.get('Read-Write_Endpoint.port') + '/' + config.get('Read-Write_Endpoint.path'),{
+													'default-graph-uri': '',
+													'query': delete_query_string,
+													'format': 'application/ld+json'
+												},{
+													username: config.get('Read-Write_Endpoint.username'),
+													password: config.get('Read-Write_Endpoint.password'),
+													auth: 'digest'
 												}, function (e,r,b) {
 													if (e) {
+														logger.error("ERROR: %o",e);
 														throw Error(e);
 													}
 													else {
@@ -266,12 +280,14 @@ function deleteWorkset(req,res) {
 									}
 								}
 								else {
+									logger.error("Cannot delete workset that does not exist");
 									throw Error("Cannot delete workset that does not exist");
 								}
 							});
 						}
 						catch (err) {
 							errorStatus.message = err.message;
+							logger.error(errorStatus);
 							res.end(JSON.stringify(errorStatus));
 							return;
 						}
@@ -280,6 +296,7 @@ function deleteWorkset(req,res) {
 			}
 			catch (err) {
 				errorStatus.message = err.message;
+				logger.error(errorStatus);
 				res.end(JSON.stringify(errorStatus));
 				return;
 			}
@@ -303,7 +320,7 @@ function getWorksetPage(req,res) {
 	}
 	fs.readFile('./SPARQL/viewWorksets/' + template_file, function(err,data) {
 		if (err) {
-			console.log("ERROR READING FILE: %o",err);
+			logger.error("ERROR READING FILE: %o",err);
 		}
 		else {
 			try {
@@ -319,6 +336,7 @@ function getWorksetPage(req,res) {
 				}
 
 				if (params['per_page'] < 1) {
+					logger.error("%s is an invalid page size",params['per_page']);
 					throw Error(params['per_page'] + " is an invalid page size");
 				}
 
@@ -328,6 +346,7 @@ function getWorksetPage(req,res) {
 				var offset = (params['page']-1)*params['per_page'];
 
 				if (offset < 0) {
+					logger.error("%s is an invalid page number",params['page']);
 					throw Error(params['page'] + " is an invalid page number");
 				}
 
@@ -341,6 +360,7 @@ function getWorksetPage(req,res) {
 						data_string = data_string.replace(/\$wsF\$/g,workset_filtered);
 					}
 					else {
+						logger.error("%s is not a valid ar value",params['ar']);
 						throw Error(params['ar'] + " is not a valid ar value");
 					}
 				}
@@ -348,6 +368,7 @@ function getWorksetPage(req,res) {
 				sendSPARQLQuery(data_string,'getWorksetPage',params,req,res);
 			} catch (err) {
 				errorStatus.message = err.message;
+				logger.error(errorStatus);
 				res.end(JSON.stringify(errorStatus));
 				return;
 			}
@@ -371,7 +392,7 @@ function getBIBFWorksetPage(req,res) {
 	}
 	fs.readFile('./SPARQL/viewWorksets/' + template_file, function(err,data) {
 		if (err) {
-			console.log("ERROR READING FILE: %o",err);
+			logger.error("ERROR READING FILE: %o",err);
 		}
 		else {
 			try {
@@ -387,6 +408,7 @@ function getBIBFWorksetPage(req,res) {
 				}
 
 				if (params['per_page'] < 1) {
+					logger.error("%s is an invalid page size",params['per_page']);
 					throw Error(params['per_page'] + " is an invalid page size");
 				}
 
@@ -396,6 +418,7 @@ function getBIBFWorksetPage(req,res) {
 				var offset = (params['page']-1)*params['per_page'];
 
 				if (offset < 0) {
+					logger.error("%s is an invalid page number",params['page']);
 					throw Error(params['page'] + " is an invalid page number");
 				}
 
@@ -409,6 +432,7 @@ function getBIBFWorksetPage(req,res) {
 						data_string = data_string.replace(/\$wsF\$/g,workset_filtered);
 					}
 					else {
+						logger.error("%s is not a valid ar value",params['ar']);
 						throw Error(params['ar'] + " is not a valid ar value");
 					}
 				}
@@ -416,6 +440,7 @@ function getBIBFWorksetPage(req,res) {
 				sendSPARQLQuery(data_string,method_name,params,req,res);
 			} catch (err) {
 				errorStatus.message = err.message;
+				logger.error(errorStatus);
 				res.end(JSON.stringify(errorStatus));
 				return;
 			}
@@ -436,7 +461,7 @@ function listWorksetsContaining(req,res) {
 	var template_file = functionConfigs[method_name]['query'];
 	fs.readFile('./SPARQL/viewWorksets/' + template_file, function(err,data) {
 		if (err) {
-			console.log("ERROR READING FILE: %o",err);
+			logger.error("ERROR READING FILE: %o",err);
 		}
 		else {
 			try {
@@ -447,7 +472,7 @@ function listWorksetsContaining(req,res) {
 					var second_template = functionConfigs[method_name]['secondary_query'];
 					fs.readFile('./SPARQL/viewWorksets/' + second_template, function(e,d) {
 						if (e) {
-							console.log("ERROR READING FILE: %o",e);
+							logger.error("ERROR READING FILE: %o",e);
 						}
 						else {
 							try {
@@ -459,6 +484,7 @@ function listWorksetsContaining(req,res) {
 								sendSPARQLQuery(data_string,'listWorksetsContaining',params,req,res);
 							} catch (e) {
 								errorStatus.message = e.message;
+								logger.error(errorStatus);
 								res.end(JSON.stringify(errorStatus));
 								return;
 							}
@@ -466,11 +492,12 @@ function listWorksetsContaining(req,res) {
 					});
 				}
 				else {
-					console.log(data_string);
+					logger.info("Data string: %s",data_string);
 					sendSPARQLQuery(data_string,'listWorksetsContaining',params,req,res);
 				}
 			} catch (err) {
 				errorStatus.message = err.message;
+				logger.error(errorStatus);
 				res.end(JSON.stringify(errorStatus));
 				return;
 			}
@@ -478,7 +505,7 @@ function listWorksetsContaining(req,res) {
 	});
 }
 
-exports.runSPARQLQuery = function(req,res) {
+export function runSPARQLQuery(req,res) {
 	res.header("Access-Control-Allow-Origin", "*");
 	res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
 
@@ -513,7 +540,7 @@ exports.runSPARQLQuery = function(req,res) {
 	}
 }
 
-exports.runAPIRequest = function(req,res,serviceMethod) {
+export function runAPIRequest(req,res,serviceMethod) {
 	var errorStatus = {
 		errorcode: -1
 	};
@@ -534,10 +561,12 @@ exports.runAPIRequest = function(req,res,serviceMethod) {
 			}
 		}
 		else {
+			logger.error("%s does not exist",req.params.serviceMethod);
 			throw Error(req.params.serviceMethod + " does not exist");
 		}
 	} catch (err) {
 		errorStatus.message = err.message;
+		logger.error(errorStatus);
 		res.end(JSON.stringify(errorStatus));
 		return;
 	}

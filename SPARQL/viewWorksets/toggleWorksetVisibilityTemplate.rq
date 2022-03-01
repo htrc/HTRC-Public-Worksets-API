@@ -1,0 +1,17 @@
+prefix htrc: <http://wcsa.htrc.illinois.edu/> 
+# MUST REPLACE variables contained within $...$ before submitting SPARQL to Virtuoso RO-sparql end point
+#   ws is Workset id
+#	wsG is the Workset graph (just the id, but replace 'wsid' with 'graph')
+DELETE {
+	GRAPH $wsG$ {
+		$ws$ htrc:hasVisibility ?access .
+	}
+}
+INSERT {
+	GRAPH $wsG$ {
+		$ws$ htrc:hasVisibility $value$ .
+	}
+}
+WHERE {
+	$ws$ htrc:hasVisibility  ?access .
+}

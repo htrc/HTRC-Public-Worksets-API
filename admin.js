@@ -1,27 +1,18 @@
 //var http = require('http');
-var request = require("request");
+import needle from 'needle';
 //config library
-var config = require('config');
+import config from 'config';
 
 function sendSPARQLQuery(query,serviceMethod,params,req,res) {
 	console.log("Sending request to %s",config.get('Read-Write_Endpoint.domain') + ':' + config.get('Read-Write_Endpoint.port') + '/' + config.get('Read-Write_Endpoint.path'));
-	request({
-		method: 'POST',
-		uri: config.get('Read-Write_Endpoint.domain') + ':' + config.get('Read-Write_Endpoint.port') + '/' + config.get('Read-Write_Endpoint.path'),
-		port: config.get('Read-Write_Endpoint.port'),
-		headers: {
-			'Content-Type': 'application/x-www-form-unencoded',
-		},
-		form: {
-			'default-graph-uri': '',
-			'query': query,
-			'format': 'text/html'
-		},
-		auth: {
-			user: config.get('Read-Write_Endpoint.username'),
-			password: config.get('Read-Write_Endpoint.password'),
-			sendImmediately: false
-		}
+	needle.post(config.get('Read-Write_Endpoint.domain') + ':' + config.get('Read-Write_Endpoint.port') + '/' + config.get('Read-Write_Endpoint.path'),{
+		'default-graph-uri': '',
+		'query': query,
+		'format': 'text/html'
+	},{
+		username: config.get('Read-Write_Endpoint.username'),
+		password: config.get('Read-Write_Endpoint.password'),
+		auth: 'digest'
 	}, function (e,r,b) {
 		if (e) {
 			throw Error(e);
@@ -38,7 +29,7 @@ function healthCheck(req,res) {
 	res.end(JSON.stringify({"health_status": 0}));
 }
 
-exports.runAPIRequest = function(req,res,serviceMethod) {
+export function runAPIRequest(req,res,serviceMethod) {
 	var errorStatus = {
 		errorcode: -1
 	};

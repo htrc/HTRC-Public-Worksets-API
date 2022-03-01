@@ -1,17 +1,19 @@
 //reading file system / file
-var fs = require("fs");
+import fs from "fs";
 //var http = require('http');
-var request = require("request");
+import needle from 'needle';
 //Library to handle forms
-var formidable = require("formidable");
+import formidable from "formidable";
 //Library for input sanitation
-var sanitizer = require('validator');
+import validator from 'validator';
 //uuid library
-const uuidv1 = require('uuid/v1');
+import { v1 as uuidv1 } from 'uuid';
+//logging library
+import { createLogger, format, transports } from 'winston';
 //config library
-var config = require('config');
+import config from 'config';
 //ajv library
-var Ajv = require('ajv');
+import Ajv from 'ajv';
 // validator
 var ajv = new Ajv();
 
@@ -34,35 +36,52 @@ var SOURCE_DATA_SCHEMA = {
 	}
 };
 
+var validate = ajv.compile(SOURCE_DATA_SCHEMA);
+
+//Setup logger
+const myFormat = format.printf( ({ level, message, timestamp , ...metadata }) => {
+	let msg = `${timestamp} [${level}] : ${message} `
+	if(metadata) {
+		msg += JSON.stringify(metadata)
+	}
+	return msg
+});
+const logger = createLogger({
+	level: 'info',
+	format: format.json()
+});
+if (process.env.NODE_ENV !== 'production') {
+	logger.add(new transports.Console({
+		level: 'debug',
+		format: format.combine(
+			format.colorize(),
+			format.splat(),
+			format.timestamp(),
+			myFormat
+		),
+	}));
+}
+
 function extractCollectionIDFromURL(url) {
 	return url.substring(url.indexOf('c=')+2);
 }
 
 function addPageSynchronously(query_index,queries) {
-	request({
-		method: 'POST',
-		uri: config.get('Read-Write_Endpoint.domain') + ':' + config.get('Read-Write_Endpoint.port') + '/' + config.get('Read-Write_Endpoint.path'),
-		port: config.get('Read-Write_Endpoint.port'),
-		form: {
-			'default-graph-uri': '',
-			'query': queries[query_index],
-			'format': 'text/html'
-		},
-		auth: {
-			user: config.get('Read-Write_Endpoint.username'),
-			password: config.get('Read-Write_Endpoint.password'),
-			sendImmediately: false
-		},
-		headers: {
-			'Content-Type': 'application/x-www-form-unencoded',
-		}
+	needle.post(config.get('Read-Write_Endpoint.domain') + ':' + config.get('Read-Write_Endpoint.port') + '/' + config.get('Read-Write_Endpoint.path'),{
+		'default-graph-uri': '',
+		'query': queries[query_index],
+		'format': 'text/html'
+	},{
+		username: config.get('Read-Write_Endpoint.username'),
+		password: config.get('Read-Write_Endpoint.password'),
+		auth: 'digest'
 	}, function (er,rs,bd) {
 		if (er) {
-			console.log("ERROR IN ADDING VOLUMES TO WORKSET: %o",er)
+			logger.error("ERROR IN ADDING VOLUMES TO WORKSET: %o",er)
 		}
 		else {
 			if (query_index+1 < queries.length) {
-				console.log("Added chunk of 1000 volumes");
+				logger.info("Added chunk of 1000 volumes");
 				addPageSynchronously(query_index+1,queries);
 			}
 		}
@@ -78,11 +97,12 @@ function gathersPaging(workset,page_size,graph_url,target_url) {
 	base_text += 'INSERT INTO ' + graph_url + '\n';
 	base_text += '{\n';
 
-	queries = []
+	var queries = []
 
 	for (var volume_counter = page_size; volume_counter < workset['gathers'].length; volume_counter++) {
+		var new_query = '';
 		if (volume_counter % page_size == 0) {
-			var new_query = base_text;
+			new_query = base_text;
 		}
 
 		new_query += target_url + '\tns3:gathers\t<http://hdl.handle.net/2027/' + workset['gathers'][volume_counter]['htitem_id'] + '> .\n';
@@ -123,17 +143,18 @@ function gathersPaging(workset,page_size,graph_url,target_url) {
 function buildWorksetObject(fields) {
 	var workset = {};
 
-	console.log("Validating user input...");
+	logger.info("Validating user input...");
 	if ('source_data' in fields && validate(fields.source_data)) {
 		var collection = fields.source_data;
 	}
 	else {
-		console.log("Missing source_data");
+		logger.error("Missing source_data");
 		return undefined;
 	}
-	console.log("Validation successful");
+	logger.info("Validation successful");
 
 	workset['id'] = uuidv1();
+	logger.debug("Created workset id: %s", workset['id']);
 
 	var today = new Date();
 	var dd = today.getDate();
@@ -148,60 +169,65 @@ function buildWorksetObject(fields) {
 
 	workset['created'] = yyyy + '-' + mm + '-' + dd;
 
+	logger.debug("Checking for private workset info");
 	if ('private_workset' in fields) {
 		workset['private'] = (fields.private_workset == true);
-		console.log("Private workset? %o",fields.private_workset == true);
+		logger.info("Private workset? %o",fields.private_workset == true);
 	}
 	else {
 		return undefined;
 	}
 
-	if ('extent' in collection && typeof collection.extent == 'string' && sanitizer.escape(collection['extent']).length > 0) {
-		workset['extent'] = sanitizer.escape(collection['extent']);
+	logger.debug("Checking for extent info");
+	if ('extent' in collection && typeof collection.extent == 'string' && validator.escape(collection['extent']).length > 0) {
+		workset['extent'] = validator.escape(collection['extent']);
 	}
 	else if (Number.isInteger(collection.extent)) {
 		workset['extent'] = collection['extent'];
 	}
 	else {
-		console.log("Missing extent");
+		logger.error("Missing extent");
 		return undefined;
 	}
 
-	if ('workset_creator_name' in fields && typeof fields.workset_creator_name == 'string' && sanitizer.escape(fields['workset_creator_name']).length > 0) {
-		workset['primary_creator'] = sanitizer.escape(fields['workset_creator_name']);
+	logger.debug("Checking for creator name");
+	if ('workset_creator_name' in fields && typeof fields.workset_creator_name == 'string' && validator.escape(fields['workset_creator_name']).length > 0) {
+		workset['primary_creator'] = validator.escape(fields['workset_creator_name']);
 	}
 	else {
-		console.log("Missing creator name");
+		logger.error("Missing creator name");
 		return undefined;
 	}
 
-	if ('htrc_workset_title' in fields && typeof fields.htrc_workset_title == 'string' && sanitizer.escape(fields['htrc_workset_title']).length > 0) {
-		workset['title'] = sanitizer.escape(fields['htrc_workset_title']);
+	logger.debug("Checking for workset title");
+	if ('htrc_workset_title' in fields && typeof fields.htrc_workset_title == 'string' && validator.escape(fields['htrc_workset_title']).length > 0) {
+		workset['title'] = validator.escape(fields['htrc_workset_title']);
 	}
-	else if ('title' in collection && typeof collection.title == 'string' && sanitizer.escape(collection['title']).length > 0) {
-		workset['title'] = sanitizer.escape(collection['title']);
+	else if ('title' in collection && typeof collection.title == 'string' && validator.escape(collection['title']).length > 0) {
+		workset['title'] = validator.escape(collection['title']);
 	}
 	else {
-		console.log("Missing workset_title");
+		logger.error("Missing workset_title");
 		return undefined;
 	}
 
-	if ('abstract' in fields && typeof fields.abstract == 'string' && sanitizer.escape(fields['abstract']).length > 0) {
-		workset['abstract'] = sanitizer.escape(fields['abstract']).replace(/\n/g,'');
+	if ('abstract' in fields && typeof fields.abstract == 'string' && validator.escape(fields['abstract']).length > 0) {
+		workset['abstract'] = validator.escape(fields['abstract']).replace(/\n/g,'');
 	}
-	else if ('description' in collection && typeof collection.description == 'string' && sanitizer.escape(collection['description']).length > 0) {
-		workset['abstract'] = sanitizer.escape(collection['description']).replace(/\n/g,'');
+	else if ('description' in collection && typeof collection.description == 'string' && validator.escape(collection['description']).length > 0) {
+		workset['abstract'] = validator.escape(collection['description']).replace(/\n/g,'');
 	}
 	else {
-		console.log("Missing description");
+		logger.error("Missing description");
 		return undefined;
 	}
 
+	logger.debug("Checking for manifest");
 	if ('gathers' in collection && Array.isArray(collection.gathers)) {
 		workset['gathers'] = collection['gathers'];
 	}
 	else {
-		console.log("Missing gathers");
+		logger.error("Missing gathers");
 		return undefined;
 	}
 
@@ -209,39 +235,46 @@ function buildWorksetObject(fields) {
 	OPTIONAL FIELDS
 */
 
-	if ('source_url' in fields && typeof fields.source_url == 'string' && sanitizer.isURL(fields.source_url)) {
+	logger.debug("Looking for origin");
+	if ('source_url' in fields && typeof fields.source_url == 'string' && validator.isURL(fields.source_url)) {
 		workset['origin'] = fields.source_url;
 	}
 	
+	logger.debug("Looking for additional creators");
 	if ('additional_creator_name' in fields) {
-		console.log("additional_creator_name type: %s",typeof fields['additional_creator_name']);
-		console.log("additional_creator_name contents: %o",fields['additional_creator_name']);
+		logger.info("additional_creator_name type: %s",typeof fields['additional_creator_name']);
+		logger.info("additional_creator_name contents: %o",fields['additional_creator_name']);
 	}
 
+	logger.debug("Adding additional creators (without check for variable existing)");
 	workset['additional_creators'] = []
 	for (var index = 1; index < 10; index++) {
-		if (('additional_creator_name'+index) in fields && typeof fields['additional_creator_name'+index] == 'string' && sanitizer.escape(fields['additional_creator_name'+index]).length > 0) {
-			workset['additional_creators'].push(sanitizer.escape(fields['additional_creator_name'+index]));
+		if (('additional_creator_name'+index) in fields && typeof fields['additional_creator_name'+index] == 'string' && validator.escape(fields['additional_creator_name'+index]).length > 0) {
+			workset['additional_creators'].push(validator.escape(fields['additional_creator_name'+index]));
 		}
 	}
 
-	if ('created' in collection && typeof collection.created == 'string' && sanitizer.escape(collection['created']).length > 0 && collection['created'] != workset['primary_creator'] ) {
-		workset['collection_creator'] = sanitizer.escape(collection['created']);
+	logger.debug("Looking for collection creator");
+	if ('created' in collection && typeof collection.created == 'string' && validator.escape(collection['created']).length > 0 && collection['created'] != workset['primary_creator'] ) {
+		workset['collection_creator'] = validator.escape(collection['created']);
 	}
 
-	if ('research_motivation' in fields && typeof fields.research_motivation == 'string' && sanitizer.escape(fields['research_motivation']).length > 0) {
-		workset['research_motivation'] = sanitizer.escape(fields.research_motivation);
+	logger.debug("Looking for research_motivation");
+	if ('research_motivation' in fields && typeof fields.research_motivation == 'string' && validator.escape(fields['research_motivation']).length > 0) {
+		workset['research_motivation'] = validator.escape(fields.research_motivation);
 	}
 
-	if ('criteria' in fields && typeof fields.criteria == 'string' && sanitizer.escape(fields.criteria).length > 0) {
-		workset['criteria'] = sanitizer.escape(fields.criteria);
+	logger.debug("Looking for criteria");
+	if ('criteria' in fields && typeof fields.criteria == 'string' && validator.escape(fields.criteria).length > 0) {
+		workset['criteria'] = validator.escape(fields.criteria);
 	}
 
+	logger.debug("Built workset object: %o",workset);
 	return workset;
 }
 
 function submitWorksetToVirtuoso(workset,res) {
-	console.log("Workset from portal: %o",workset);
+	logger.info("Created workset object");
 
 	var graph_url = '<' + config.get('Worksets.base') + '/graph/' + workset['id'] + '>';
 	var target_url = '<' + config.get('Worksets.base') + '/wsid/' + workset['id'] + '>';
@@ -288,8 +321,8 @@ function submitWorksetToVirtuoso(workset,res) {
 	}
 
 	var temporal_index = 0;
-	while ('temporal_coverage' + temporal_index.toString() in fields && sanitizer.escape(fields['temporal_coverage' + temporal_index.toString()]) != '') {
-		query += '\tns2:temporal\t"' + sanitizer.escape(fields['temporal_coverage' + temporal_index.toString()]) + '" ;\n';
+	while ('temporal_coverage' + temporal_index.toString() in fields && validator.escape(fields['temporal_coverage' + temporal_index.toString()]) != '') {
+		query += '\tns2:temporal\t"' + validator.escape(fields['temporal_coverage' + temporal_index.toString()]) + '" ;\n';
 		temporal_index += 1;
 	}*/
 
@@ -313,117 +346,73 @@ function submitWorksetToVirtuoso(workset,res) {
 		query += '};\n\n';
 	}
 
-	console.log(query);
-	console.log("ABOUT TO SEND TURTLE FILE");
+	logger.info(query);
+	logger.info("ABOUT TO SEND TURTLE FILE");
+	logger.info("SENT TURTLE FILE");
 
 	//Build collection
-	request({
-		method: 'POST',
-		uri: config.get('Read-Write_Endpoint.domain') + ':' + config.get('Read-Write_Endpoint.port') + '/' + config.get('Read-Write_Endpoint.path'),
-		port: config.get('Read-Write_Endpoint.port'),
-		form: {
-			'default-graph-uri': '',
-			'query': query,
-			'format': 'text/html'
-		},
-		auth: {
-			user: config.get('Read-Write_Endpoint.username'),
-			password: config.get('Read-Write_Endpoint.password'),
-			sendImmediately: false
-		},
-		headers: {
-			'Content-Type': 'application/x-www-form-unencoded',
-		}
+	needle.post(config.get('Read-Write_Endpoint.domain') + ':' + config.get('Read-Write_Endpoint.port') + '/' + config.get('Read-Write_Endpoint.path'),{
+		'default-graph-uri': '',
+		'query': query,
+		'format': 'text/html'
+	},{
+		username: config.get('Read-Write_Endpoint.username'),
+		password: config.get('Read-Write_Endpoint.password'),
+		auth: 'digest'
 	}, function (er,rs,bd) {
 		if (er) {
 			var errorStatus = {
 				errorcode: -1
 			};
 			errorStatus.message = er.message;
+			logger.error("ERROR: %o",errorStatus);
 			res.end(JSON.stringify(errorStatus));
 		}
 		else {
-			console.log(bd);
+			logger.info(bd);
 			if (bd.indexOf("Virtuoso 37000 Error SP031: SPARQL: Internal error: The length of generated SQL text has exceeded 10000 lines of code") == 0) {
 				var errorStatus = {
 					errorcode: 413,
 					message: "Collection too large to ingest"
 				};
+				logger.error("ERROR: %o",errorStatus);
 				res.status(413).end(JSON.stringify(errorStatus));
 			}
 			else {
-				var pd_query = 'prefix dcterms: <http://purl.org/dc/terms/>\nprefix edm: <http://www.europeana.eu/schemas/edm/>\nprefix htrc: <http://wcsa.htrc.illinois.edu/> \nprefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\nprefix xsd: <http://www.w3.org/2001/XMLSchema#>\n\nCONSTRUCT {\n  ?wsid\n	  rdf:type htrc:Workset ;\n	  dcterms:title ?title ;\n	  dcterms:creator ?cre ; \n	  dcterms:created ?dat ;\n	  dcterms:extent  ?ext ;\n	  edm:gathers ?vols .} \n\nwhere {\n  ?wsid \n	  rdf:type htrc:Workset ;\n	  dcterms:title ?title ;\n	  dcterms:creator ?cre ; \n	  dcterms:created ?dat ;\n	  dcterms:extent  ?ext ;\n	  edm:gathers ?vols . \n	  { select ?vols\n				where {\n				  ?wsid edm:gathers ?vols.\n				  ?vols dcterms:accessRights ?ar\n				  filter ( ?ar = "pd" ) .\n				}\n			  }\n  VALUES ( ?wsid ) \n	 { \n	   ( ' + target_url + ' ) \n	 }	  	   \n}';
-				
-				request({
-					method: 'POST',
-					uri: config.get('Read-Only_Endpoint.domain') + '/' + config.get('Read-Only_Endpoint.path'),
-					port: config.get('Read-Only_Endpoint.port'),
-					form: {
-						'default-graph-uri': '',
-						'query': pd_query,
-						'format': 'text/html'
-					},
-					headers: {
-						'Content-Type': 'application/x-www-form-unencoded',
-					}
-				}, function (e,r,b) {
-					if (e) {
-						var errorStatus = {
-							errorcode: -1
-						};
-						errorStatus.message = e.message;
-						res.end(JSON.stringify(errorStatus));
-					}
-					else {
-						console.log("GOT PD WORKSET");
+				logger.info("Created Workset");
+				res.header("Location", target_url.replace('<','').replace('>',''),);
+				res.status(201).end(JSON.stringify({
+					result_title: workset['title'],
+					result_extent: workset['extent'],
+					result_url: target_url.replace('<','').replace('>',''),
+					result_volumes: []
+				}));
 
-						var start_index = b.indexOf('n4:gathers');
-						var shorter_string = b.substring(start_index);
-						console.log("Gathers substring: %s",shorter_string);
-						var slices = shorter_string.split('"');
-						console.log("Gathers slices: %o",slices);
-						var pd_volumes = [];
-						for (var i = 0; i < slices.length; i++) {
-							if (slices[i].substring(0,27) == 'http://hdl.handle.net/2027/') {
-								pd_volumes.push(slices[i]);
-							}
-						}
-						console.log("Gathers volumes: %o",pd_volumes);
-
-						res.header("Location", target_url.replace('<','').replace('>',''),);
-						res.status(201).end(JSON.stringify({
-							result_title: workset['title'],
-							result_extent: workset['extent'],
-							result_url: target_url.replace('<','').replace('>',''),
-							result_volumes: pd_volumes
-						}));
-					}
-				});
 			}
 		}
 	});
 
 	if (max < workset['gathers'].length) {
-		console.log("Ingesting into chunks");
+		logger.info("Ingesting into chunks");
 		gathersPaging(workset,1000,graph_url,target_url);
 	}
 
-	console.log("Created Workset");
+//	console.log("Created Workset");
 }
 
-exports.submitWorkset = function(req,res) {
+export function submitWorkset(req,res) {
 	res.header("Content-type", "application/json");
 
-	console.log("Request has Content-Type: ",req.get('Content-Type'));
-	console.log("Body has type: %o",typeof req.body);
-	console.log("Reached submitWorkset: %o",req.body);
+	logger.info("Request has Content-Type: %s",req.get('Content-Type'));
+	logger.info("Body has type: %o",typeof req.body);
+	logger.info("Reached submitWorkset: %o",req.body);
 
 	var workset = buildWorksetObject(req.body);
 	if (workset) {
 		submitWorksetToVirtuoso(workset,res);
 	}
 	else {
-		console.log("Missing required field");
+		logger.error("Missing required field");
 		var errorStatus = {
 			errorcode: 400,
 			message: "Missing required field"
